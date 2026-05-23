@@ -2,7 +2,7 @@
   "expo": {
     "name": "awardly-mobile",
     "slug": "awardly-mobile",
-    "owner": "bento-org",
+    "owner": "awardly",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -48,14 +48,14 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "c5e1c142-753d-417f-8db3-5cd6a1f63eb5"
+        "projectId": "f6324cc6-aa32-4d76-89e4-90f54561c81e"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/c5e1c142-753d-417f-8db3-5cd6a1f63eb5"
+      "url": "https://u.expo.dev/f6324cc6-aa32-4d76-89e4-90f54561c81e"
     }
   }
 }
