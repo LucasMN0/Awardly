@@ -1,10 +1,3 @@
-// app/(autenticado)/(tabs)/log.tsx  ← ou categorias/index.tsx
-// Mudanças principais:
-// - SectionList em vez de div com map aninhado
-// - Modal do RN em vez de componente fixo na tela
-// - window.scrollTo → sectionListRef.scrollToLocation
-// - styles.btnLog via StyleSheet em vez de CSS modules
-
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,

@@ -1,6 +1,3 @@
-// Equivalente ao globals.css — paleta e tipografia do Awardly
-// No RN não existe CSS vars, então exportamos um objeto de tema
-
 export const colors = {
   bg:         '#0f0e0b',
   surface:    '#1a1814',
@@ -15,8 +12,6 @@ export const colors = {
   error:      '#DC143C',
   errorBg:    'rgba(224,123,123,0.08)',
   errorBorder:'rgba(224,123,123,0.2)',
-
-  // Utilitários com alpha (usados frequentemente nos CSS)
   white10:  'rgba(255,255,255,0.10)',
   white20:  'rgba(255,255,255,0.20)',
   white35:  'rgba(255,255,255,0.35)',
@@ -35,32 +30,16 @@ export const colors = {
   overlay50:'rgba(0,0,0,0.50)',
 } as const;
 
-// Fontes — carregar via expo-font no _layout.tsx
-// useFonts({
-//   'CormorantGaramond-Light':        require('../assets/fonts/CormorantGaramond-Light.ttf'),
-//   'CormorantGaramond-LightItalic':  require('../assets/fonts/CormorantGaramond-LightItalic.ttf'),
-//   'CormorantGaramond-Regular':      require('../assets/fonts/CormorantGaramond-Regular.ttf'),
-//   'Poppins-Regular':                require('../assets/fonts/Poppins-Regular.ttf'),
-//   'Poppins-Medium':                 require('../assets/fonts/Poppins-Medium.ttf'),
-//   'Poppins-SemiBold':               require('../assets/fonts/Poppins-SemiBold.ttf'),
-//   'Poppins-Bold':                   require('../assets/fonts/Poppins-Bold.ttf'),
-//   'Jost-Light':                     require('../assets/fonts/Jost-Light.ttf'),
-//   'Jost-Regular':                   require('../assets/fonts/Jost-Regular.ttf'),
-//   'Jost-Medium':                    require('../assets/fonts/Jost-Medium.ttf'),
-// });
-
 export const fonts = {
   cormorant:       'CormorantGaramond-Light',
   cormorantItalic: 'CormorantGaramond-LightItalic',
+  cormorantRegular: 'CormorantGaramond-Regular',
   poppins:         'Poppins-Regular',
   poppinsMedium:   'Poppins-Medium',
   poppinsSemiBold: 'Poppins-SemiBold',
   poppinsBold:     'Poppins-Bold',
-  jost:            'Jost-Light',
-  jostRegular:     'Jost-Regular',
 } as const;
 
-// Espaçamentos e bordas recorrentes
 export const radius = {
   sm: 2,
   md: 4,

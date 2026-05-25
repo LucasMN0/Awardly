@@ -25,7 +25,6 @@ export default function Login() {
         onChangeText={setEmail}
         autoCapitalize="none"
         keyboardType="email-address"
-        style={{ borderWidth: 1, marginBottom: 12, padding: 8 }}
       />
 
       <Text>Senha</Text>
@@ -33,7 +32,6 @@ export default function Login() {
         value={senha}
         onChangeText={setSenha}
         secureTextEntry
-        style={{ borderWidth: 1, marginBottom: 12, padding: 8 }}
       />
 
       <Button title="Entrar" onPress={handleLogin} />

@@ -24,12 +24,11 @@ export default function Cadastro() {
   }
 
   return (
-    <View style={{ flex: 1, padding: 20, justifyContent: 'center' }}>
+    <View>
       <Text>Nome</Text>
       <TextInput
         value={nome}
         onChangeText={setNome}
-        style={{ borderWidth: 1, marginBottom: 12, padding: 8 }}
       />
 
       <Text>Email</Text>
@@ -38,7 +37,6 @@ export default function Cadastro() {
         onChangeText={setEmail}
         autoCapitalize="none"
         keyboardType="email-address"
-        style={{ borderWidth: 1, marginBottom: 12, padding: 8 }}
       />
 
       <Text>Senha</Text>
@@ -46,7 +44,6 @@ export default function Cadastro() {
         value={senha}
         onChangeText={setSenha}
         secureTextEntry
-        style={{ borderWidth: 1, marginBottom: 12, padding: 8 }}
       />
 
       <Button title="Cadastrar" onPress={handleCadastro} />
