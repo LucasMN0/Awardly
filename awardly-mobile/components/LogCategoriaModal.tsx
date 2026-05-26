@@ -27,8 +27,11 @@ function tipoCategoria(categoria: string) {
 }
 
 async function buscarFotoPessoa(nome: string): Promise<string | null> {
+  if (!nome || !TMDB_KEY) return null;
   try {
-    const res = await fetch(`https://api.themoviedb.org/3/search/person?api_key=${TMDB_KEY}&query=${encodeURIComponent(nome)}&language=pt-BR`);
+    const res = await fetch(
+      `https://api.themoviedb.org/3/search/person?api_key=${TMDB_KEY}&query=${encodeURIComponent(nome)}&language=pt-BR`
+    );
     const data = await res.json();
     const person = data.results?.[0];
     return person?.profile_path ? `${TMDB_IMAGE}/w185${person.profile_path}` : null;
@@ -36,12 +39,37 @@ async function buscarFotoPessoa(nome: string): Promise<string | null> {
 }
 
 async function buscarPosterFilme(tmdbId: string | number): Promise<string | null> {
-  if (!tmdbId) return null;
+  if (!tmdbId || !TMDB_KEY) return null;
   try {
-    const res = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_KEY}&language=pt-BR`);
+    const res = await fetch(
+      `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_KEY}&language=pt-BR`
+    );
     const data = await res.json();
     return data?.poster_path ? `${TMDB_IMAGE}/w342${data.poster_path}` : null;
   } catch { return null; }
+}
+
+function extrairNomesDeAtores(
+  atoresIndicados: Record<string, any>,
+  categoria: string,
+  tituloFilme: string
+): string[] {
+  // Tenta pela chave exata da categoria
+  let valor = atoresIndicados[categoria];
+
+  // Fallback 1: chave é o título do filme
+  if (valor === undefined) valor = atoresIndicados[tituloFilme];
+
+  // Fallback 2: se só tem uma chave, pega o primeiro valor (estrutura desconhecida)
+  if (valor === undefined) {
+    const valores = Object.values(atoresIndicados);
+    if (valores.length > 0) valor = valores[0];
+  }
+
+  if (!valor) return [];
+  if (Array.isArray(valor)) return valor.filter(Boolean);
+  if (typeof valor === 'string') return [valor];
+  return [];
 }
 
 interface Indicado { nomeItem: string | null; filme: string; foto: string | null; venceu: boolean; }
@@ -101,14 +129,14 @@ export default function LogCategoriaModal({ visivel, categoria, ano, filmes, onC
 
   useEffect(() => {
     if (!visivel) {
-        setIndicados([]);
-        setDeveria(null);
-        setQueria(null);
-        setReview('');
-        setMensagem('');
-        setJaLogado(null);
-        setConfirmarDelete(false);
-        return;
+      setIndicados([]);
+      setDeveria(null);
+      setQueria(null);
+      setReview('');
+      setMensagem('');
+      setJaLogado(null);
+      setConfirmarDelete(false);
+      return;
     }
     montar();
   }, [visivel, categoria, ano]);
@@ -117,44 +145,72 @@ export default function LogCategoriaModal({ visivel, categoria, ano, filmes, onC
     setMontando(true);
     setMensagem('');
     setConfirmarDelete(false);
-    try {   
+    try {
       const lista: Indicado[] = [];
 
       for (const filme of filmes) {
-        const posterUrl = filme.poster || await buscarPosterFilme(filme.tmdbId);
+        // Busca poster: usa o que veio (se não for null) ou busca no TMDB
+        const posterUrl: string | null =
+          filme.poster || (filme.tmdbId ? await buscarPosterFilme(filme.tmdbId) : null);
 
         if (tipo === 'ator') {
-          const atores = filme.atoresIndicados?.[categoria];
-          const nomes = Array.isArray(atores) ? atores : atores ? [atores] : [];
+          // Suporta múltiplas estruturas de atoresIndicados
+          const nomes = extrairNomesDeAtores(
+            filme.atoresIndicados || {},
+            categoria,
+            filme.titulo
+          );
           for (const nome of nomes) {
             const foto = await buscarFotoPessoa(nome);
             const vencedores = filme.vencedores || [];
             const temDetalhado = vencedores.some((v: string) => v.startsWith(`${categoria}::`));
-            const venceu = temDetalhado ? vencedores.includes(`${categoria}::${nome}`) : vencedores.includes(categoria);
+            const venceu = temDetalhado
+              ? vencedores.includes(`${categoria}::${nome}`)
+              : vencedores.includes(categoria);
             lista.push({ nomeItem: nome, filme: filme.titulo, foto, venceu });
           }
         } else if (tipo === 'diretor') {
           const nome = filme.diretor;
           if (nome) {
             const foto = await buscarFotoPessoa(nome);
-            lista.push({ nomeItem: nome, filme: filme.titulo, foto, venceu: (filme.vencedores || []).includes(categoria) });
+            lista.push({
+              nomeItem: nome,
+              filme: filme.titulo,
+              foto,
+              venceu: (filme.vencedores || []).includes(categoria),
+            });
           }
         } else if (tipo === 'roteiro') {
-          const nomes = Array.isArray(filme.roteiristas) ? filme.roteiristas.join(', ') : filme.roteiristas;
-          lista.push({ nomeItem: nomes, filme: filme.titulo, foto: posterUrl, venceu: (filme.vencedores || []).includes(categoria) });
+          const nomes = Array.isArray(filme.roteiristas)
+            ? filme.roteiristas.join(', ')
+            : filme.roteiristas;
+          lista.push({
+            nomeItem: nomes || null,
+            filme: filme.titulo,
+            foto: posterUrl,
+            venceu: (filme.vencedores || []).includes(categoria),
+          });
         } else if (tipo === 'cancao') {
           const cancoes = filme.cancao?.[categoria];
           const nms = Array.isArray(cancoes) ? cancoes : cancoes ? [cancoes] : [];
           for (const cancao of nms) {
-            const venceu = (filme.vencedores || []).some((v: string) => v === `${categoria}::${cancao}` || v === categoria);
+            const venceu = (filme.vencedores || []).some(
+              (v: string) => v === `${categoria}::${cancao}` || v === categoria
+            );
             lista.push({ nomeItem: cancao, filme: filme.titulo, foto: posterUrl, venceu });
           }
         } else {
-          lista.push({ nomeItem: null, filme: filme.titulo, foto: posterUrl, venceu: (filme.vencedores || []).includes(categoria) });
+          // Categoria de filme (Melhor Filme, Melhor Filme Internacional, etc.)
+          lista.push({
+            nomeItem: null,
+            filme: filme.titulo,
+            foto: posterUrl,
+            venceu: (filme.vencedores || []).includes(categoria),
+          });
         }
       }
 
-      // Remove duplicatas
+      // Remove duplicatas por nomeItem + filme
       const unicos = lista.filter((item, idx, arr) =>
         arr.findIndex((i) => i.nomeItem === item.nomeItem && i.filme === item.filme) === idx
       );
@@ -180,7 +236,7 @@ export default function LogCategoriaModal({ visivel, categoria, ano, filmes, onC
         setReview('');
       }
     } catch (e) {
-      console.error(e);
+      console.error('[LogCategoriaModal] erro ao montar:', e);
     } finally {
       setMontando(false);
     }
@@ -233,10 +289,8 @@ export default function LogCategoriaModal({ visivel, categoria, ano, filmes, onC
         <TouchableOpacity style={s.overlayBg} activeOpacity={1} onPress={() => onClose()} />
 
         <View style={s.sheet}>
-          {/* Handle */}
           <View style={s.handle} />
 
-          {/* Header */}
           <View style={s.header}>
             <View>
               <Text style={s.headerTitulo}>log da categoria</Text>
@@ -258,7 +312,16 @@ export default function LogCategoriaModal({ visivel, categoria, ano, filmes, onC
               {vencedorReal && (
                 <View style={s.vencedorBox}>
                   {vencedorReal.foto ? (
-                    <Image source={{ uri: vencedorReal.foto }} style={s.vencedorFoto} />
+                    <Image
+                      source={{ uri: vencedorReal.foto }}
+                      style={[
+                        s.vencedorFoto,
+                        // Pessoas: quadrado; filmes: proporção de poster
+                        (tipo === 'ator' || tipo === 'diretor')
+                          ? s.vencedorFotoPessoa
+                          : s.vencedorFotoFilme,
+                      ]}
+                    />
                   ) : (
                     <View style={s.vencedorFotoPlaceholder}>
                       <Text style={{ fontSize: 20 }}>🏆</Text>
@@ -267,7 +330,9 @@ export default function LogCategoriaModal({ visivel, categoria, ano, filmes, onC
                   <View style={{ flex: 1 }}>
                     <Text style={s.vencedorLabel}>vencedor real</Text>
                     <Text style={s.vencedorNome}>{vencedorLabel}</Text>
-                    {vencedorReal.nomeItem && <Text style={s.vencedorFilme}>{vencedorReal.filme}</Text>}
+                    {vencedorReal.nomeItem && (
+                      <Text style={s.vencedorFilme}>{vencedorReal.filme}</Text>
+                    )}
                   </View>
                 </View>
               )}
@@ -278,9 +343,13 @@ export default function LogCategoriaModal({ visivel, categoria, ano, filmes, onC
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={s.cardsRow}>
                     {indicados.map((ind, i) => (
-                      <CardIndicado key={i} tipo={tipo} nomeItem={ind.nomeItem} filme={ind.filme}
-                        foto={ind.foto} selecionado={deveria === (ind.nomeItem ?? ind.filme)}
-                        onPress={() => setDeveria(ind.nomeItem ?? ind.filme)} />
+                      <CardIndicado
+                        key={i} tipo={tipo}
+                        nomeItem={ind.nomeItem} filme={ind.filme}
+                        foto={ind.foto}
+                        selecionado={deveria === (ind.nomeItem ?? ind.filme)}
+                        onPress={() => setDeveria(ind.nomeItem ?? ind.filme)}
+                      />
                     ))}
                   </View>
                 </ScrollView>
@@ -292,9 +361,13 @@ export default function LogCategoriaModal({ visivel, categoria, ano, filmes, onC
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={s.cardsRow}>
                     {indicados.map((ind, i) => (
-                      <CardIndicado key={i} tipo={tipo} nomeItem={ind.nomeItem} filme={ind.filme}
-                        foto={ind.foto} selecionado={queria === (ind.nomeItem ?? ind.filme)}
-                        onPress={() => setQueria(ind.nomeItem ?? ind.filme)} />
+                      <CardIndicado
+                        key={i} tipo={tipo}
+                        nomeItem={ind.nomeItem} filme={ind.filme}
+                        foto={ind.foto}
+                        selecionado={queria === (ind.nomeItem ?? ind.filme)}
+                        onPress={() => setQueria(ind.nomeItem ?? ind.filme)}
+                      />
                     ))}
                   </View>
                 </ScrollView>
@@ -315,14 +388,12 @@ export default function LogCategoriaModal({ visivel, categoria, ano, filmes, onC
                 />
               </View>
 
-              {/* Mensagem */}
               {mensagem ? (
                 <Text style={[s.mensagem, mensagem === 'Log salvo!' ? s.mensagemSucesso : s.mensagemErro]}>
                   {mensagem}
                 </Text>
               ) : null}
 
-              {/* Ações */}
               <View style={s.acoes}>
                 {jaLogado && (
                   <TouchableOpacity
@@ -358,8 +429,8 @@ const s = StyleSheet.create({
   },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
-  headerTitulo: { fontFamily: fonts.cormorantItalic, fontSize: 22, color: colors.text },
-  headerSub: { fontFamily: fonts.poppins, fontSize: 13, color: colors.white45, marginTop: 2 },
+  headerTitulo: { fontFamily: fonts.cormorantItalic, fontSize: 32, color: colors.text },
+  headerSub: { fontFamily: fonts.poppins, fontSize: 13, color: colors.white45, marginTop: 7 },
   btnFechar: { padding: 4 },
   montandoWrap: { padding: 40, alignItems: 'center' },
   scrollContent: { padding: 20, gap: 24, paddingBottom: 40 },
@@ -370,7 +441,12 @@ const s = StyleSheet.create({
     backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.gold30,
     borderRadius: 6, padding: 12,
   },
-  vencedorFoto: { width: 52, height: 52, borderRadius: 6, resizeMode: 'cover' },
+  // Base comum
+  vencedorFoto: { borderRadius: 6, resizeMode: 'cover' },
+  // Pessoa: quadrado generoso para ver o rosto
+  vencedorFotoPessoa: { width: 52, height: 52 },
+  // Filme: proporção de poster (2:3)
+  vencedorFotoFilme: { width: 44, height: 66 },
   vencedorFotoPlaceholder: { width: 52, height: 52, borderRadius: 6, backgroundColor: colors.cardBg, alignItems: 'center', justifyContent: 'center' },
   vencedorLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8, color: colors.white35, fontFamily: fonts.poppins },
   vencedorNome: { fontFamily: fonts.poppinsBold, fontSize: 15, color: colors.text, marginTop: 2 },
@@ -414,5 +490,5 @@ const s = StyleSheet.create({
   btnDeletarTxt: { fontFamily: fonts.poppinsMedium, fontSize: 13, color: colors.white45 },
   btnDeletarTxtConfirmar: { color: colors.error },
   btnSalvar: { flex: 1, paddingVertical: 12, backgroundColor: colors.gold, borderRadius: 4, alignItems: 'center' },
-  btnSalvarTxt: { fontFamily: fonts.poppinsBold, fontSize: 13, color: '#0a0906' },
+  btnSalvarTxt: { fontFamily: fonts.poppinsMedium, fontSize: 13, color: '#0a0906' },
 });
