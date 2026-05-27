@@ -19,6 +19,7 @@ import {
 import { useRouter } from 'expo-router';
 import { colors, fonts, radius } from '../constants/theme';
 import type { Filme } from '../hooks/useFilmes';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
@@ -74,14 +75,17 @@ export default function FilmeCard({
       )}
 
       {/* Overlay de informações — sempre visível no mobile */}
-      <View style={styles.overlay}>
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.99)']}
+        style={styles.overlay}
+      >
         <Text style={styles.titulo} numberOfLines={2}>{filme.titulo}</Text>
         {nomeItem ? (
           <Text style={styles.atorIndicado} numberOfLines={1}>{nomeItem}</Text>
         ) : (
           <Text style={styles.ano}>{filme.anoLancamento}</Text>
         )}
-      </View>
+      </LinearGradient>
     </TouchableOpacity>
   );
 }
@@ -110,9 +114,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     position: 'absolute',
   },
-
-  // Overlay gradient — no RN usamos LinearGradient do expo-linear-gradient
-  // Por ora usamos uma View escura semitransparente na parte inferior
   overlay: {
     position: 'absolute',
     bottom: 0,
@@ -121,9 +122,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
     paddingTop: 32,
-    // Para gradient real: substituir por <LinearGradient> do expo-linear-gradient
-    // colors={['transparent', 'rgba(0,0,0,0.99)']}
-    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   titulo: {
     fontFamily: fonts.poppinsBold,

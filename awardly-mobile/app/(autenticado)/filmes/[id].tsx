@@ -534,18 +534,20 @@ export default function FilmeDetalheScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
 
-        {/* ── Hero: backdrop + fade + poster ── */}
+        {/* ── Hero ── */}
         <View style={s.heroWrap}>
           {filme.backdrop ? (
             <Image source={{ uri: filme.backdrop }} style={s.backdrop} />
           ) : (
             <View style={[s.backdrop, { backgroundColor: '#1a1610' }]} />
           )}
+
           <LinearGradient
             colors={['transparent', BG]}
             style={s.backdropFade}
             pointerEvents="none"
           />
+
           <View style={s.heroConteudo}>
             <Image source={{ uri: filme.poster }} style={s.poster} />
             <View style={s.heroInfo}>
@@ -558,7 +560,6 @@ export default function FilmeDetalheScreen() {
                   .filter(Boolean)
                   .join(' · ')}
               </Text>
-              {/* Gêneros */}
               <View style={s.tagsRow}>
                 {filme.generos.map((g: string) => (
                   <View key={g} style={s.tag}>
@@ -788,18 +789,25 @@ const s = StyleSheet.create({
   },
 
   // Hero
-  heroWrap: { position: 'relative', height: BACKDROP_H + POSTER_H * 0.5 },
-  backdrop: { width: '100%', height: BACKDROP_H, resizeMode: 'cover' },
+  heroWrap: {
+    position: 'relative',
+    height: BACKDROP_H,           
+  },
+  backdrop: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
   backdropFade: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: BACKDROP_H * 0.75,
+    height: BACKDROP_H * 0.7,     
   },
   heroConteudo: {
     position: 'absolute',
-    bottom: 0,
+    bottom: -POSTER_H * 0.45,     
     left: 16,
     right: 16,
     flexDirection: 'row',
@@ -810,19 +818,17 @@ const s = StyleSheet.create({
     width: POSTER_W,
     height: POSTER_H,
     borderRadius: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(201,168,76,0.25)',
   },
   heroInfo: { flex: 1, gap: 5, paddingBottom: 4 },
   titulo: {
     fontFamily: 'CormorantGaramond-Regular',
-    fontSize: 22,
+    fontSize: 21,
     color: '#fff',
     lineHeight: 26,
   },
   tituloOriginal: {
     fontFamily: 'CormorantGaramond-LightItalic',
-    fontSize: 13,
+    fontSize: 15,
     color: 'rgba(255,255,255,0.45)',
   },
   meta: {
@@ -842,7 +848,7 @@ const s = StyleSheet.create({
   tagTxt: { fontFamily: 'Poppins-Regular', fontSize: 10, color: 'rgba(255,255,255,0.5)' },
 
   // Corpo
-  corpo: { paddingHorizontal: 16, paddingTop: 20, gap: 24 },
+  corpo: { paddingHorizontal: 16, paddingTop: POSTER_H * 0.45 + 16, gap: 24 },
 
   // Créditos
   creditos: { gap: 8 },
