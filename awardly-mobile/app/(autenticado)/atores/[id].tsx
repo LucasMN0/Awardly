@@ -1,10 +1,3 @@
-// app/(autenticado)/atores/[id].tsx
-// Mudanças principais:
-// - use(params) do Next.js → useLocalSearchParams do expo-router
-// - window.scrollTo → ScrollView com ref
-// - max-height animado (bio expandida) → Animated.Value
-// - grid 5 colunas → FlatList numColumns={3}
-// - router.push com template string → router.push tipado
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -22,49 +15,34 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import Parse from '../../../lib/parseClient';
 import { getPessoa, getPessoaCreditos, getImageURL } from '../../../lib/tmdb';
 import { colors, fonts, spacing, radius } from '../../../constants/theme';
+import { useWindowDimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 48 - 28) / 3; // 3 colunas com gaps
+const CARD_WIDTH = (width - 48) / 2 - 8;
 
 // ─── Helpers (idênticos ao web) ──────────────────────────────────────────────
 
-async function buscarFilmesOscarDoAtor(tmdbIdAtor: string | number) {
-  const Filme = Parse.Object.extend('Filme');
-  const query = new Parse.Query(Filme);
+async function buscarFilmesOscarDoAtor(tmdbIdAtor: string | number, creditosAtor: { cast?: any[]; crew?: any[] }) {
+  const query = new Parse.Query('Filme');
   query.limit(1000);
   const todos = await query.find();
-  const filmesDoAtor: any[] = [];
 
-  await Promise.allSettled(
-    todos.map(async (f: any) => {
-      const tmdbId = f.get('tmdbId');
-      try {
-        const res = await fetch(
-          `${process.env.EXPO_PUBLIC_TMDB_BASE_URL}/movie/${tmdbId}/credits?api_key=${process.env.EXPO_PUBLIC_TMDB_API_KEY}`
-        );
-        const data = await res.json();
-        const participou =
-          data.cast?.some((c: any) => c.id === Number(tmdbIdAtor)) ||
-          data.crew?.some((c: any) => c.id === Number(tmdbIdAtor));
+  const idsDoAtor = new Set([
+    ...(creditosAtor.cast || []).map((c) => c.id),
+    ...(creditosAtor.crew || []).map((c) => c.id),
+  ]);
 
-        if (participou) {
-          const personagem = data.cast?.find((c: any) => c.id === Number(tmdbIdAtor))?.character || null;
-          const job = data.crew?.find((c: any) => c.id === Number(tmdbIdAtor))?.job || null;
-          filmesDoAtor.push({
-            tmdbId,
-            titulo: f.get('titulo'),
-            categorias: f.get('categorias') || [],
-            vencedores: f.get('vencedores') || [],
-            atoresIndicados: f.get('atoresIndicados') || {},
-            ano: f.get('ano'),
-            personagem,
-            job,
-          });
-        }
-      } catch {}
-    })
-  );
-  return filmesDoAtor;
+  return todos
+    .filter((f) => idsDoAtor.has(Number(f.get('tmdbId'))))
+    .map((f) => ({
+      tmdbId: f.get('tmdbId'),
+      titulo: f.get('titulo'),
+      categorias: f.get('categorias') || [],
+      vencedores: f.get('vencedores') || [],
+      atoresIndicados: f.get('atoresIndicados') || {},
+      ano: f.get('ano'),
+    }));
 }
 
 function calcularIdade(nascimento?: string, falecimento?: string) {
@@ -90,6 +68,7 @@ function FilmeCardSimples({ tmdbId, titulo }: { tmdbId: string | number; titulo:
   const router = useRouter();
 
   useEffect(() => {
+    if (!tmdbId) return;
     fetch(
       `${process.env.EXPO_PUBLIC_TMDB_BASE_URL}/movie/${tmdbId}?api_key=${process.env.EXPO_PUBLIC_TMDB_API_KEY}&language=pt-BR`
     )
@@ -100,8 +79,8 @@ function FilmeCardSimples({ tmdbId, titulo }: { tmdbId: string | number; titulo:
 
   return (
     <TouchableOpacity
-      style={styles.filmeCard}
-      onPress={() => router.push(`/filmes/${tmdbId}` as any)}
+      style={[styles.filmeCard, { width: CARD_WIDTH, height: CARD_WIDTH * 1.5 }]}
+      onPress={() => router.push(`/(autenticado)/filmes/${String(tmdbId)}` as any)}
       activeOpacity={0.8}
     >
       {poster ? (
@@ -109,9 +88,12 @@ function FilmeCardSimples({ tmdbId, titulo }: { tmdbId: string | number; titulo:
       ) : (
         <View style={[styles.filmePoster, { backgroundColor: colors.surface }]} />
       )}
-      <View style={styles.filmeOverlay}>
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.85)']}
+        style={styles.filmeOverlay}
+      >
         <Text style={styles.filmeTitulo} numberOfLines={2}>{titulo}</Text>
-      </View>
+      </LinearGradient>
     </TouchableOpacity>
   );
 }
@@ -121,7 +103,8 @@ function FilmeCardSimples({ tmdbId, titulo }: { tmdbId: string | number; titulo:
 export default function AtorUnico() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-
+  const { width } = useWindowDimensions();
+  
   const [ator, setAtor] = useState<any>(null);
   const [filmesOscar, setFilmesOscar] = useState<any[]>([]);
   const [indicacoes, setIndicacoes] = useState<any[]>([]);
@@ -131,12 +114,13 @@ export default function AtorUnico() {
   useEffect(() => {
     async function carregar() {
       try {
-        const [pessoa, filmes, creditos] = await Promise.all([
+        const [pessoa, creditos] = await Promise.all([
           getPessoa(id),
-          buscarFilmesOscarDoAtor(id),
           getPessoaCreditos(id),
         ]);
 
+        const filmes = await buscarFilmesOscarDoAtor(id, creditos);
+        
         setAtor({
           nome: pessoa.name,
           foto: getImageURL(pessoa.profile_path, 'w342'),
@@ -337,9 +321,9 @@ export default function AtorUnico() {
           </Text>
         ) : (
           <View style={styles.filmesGrid}>
-            {filmesOscar.map((filme: any) => (
+            {filmesOscar.map((filme: any, i: number) => (
               <FilmeCardSimples
-                key={filme.tmdbId}
+                key={`${filme.tmdbId ?? 'noid'}-${i}`}
                 tmdbId={filme.tmdbId}
                 titulo={filme.titulo}
               />
@@ -532,10 +516,11 @@ const styles = StyleSheet.create({
   filmesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   filmeCard: {
     width: CARD_WIDTH,
+    height: CARD_WIDTH * 1.5,
     aspectRatio: 2 / 3,
     borderRadius: radius.md,
     overflow: 'hidden',
@@ -552,8 +537,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: spacing.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
   },
   filmeTitulo: {
     fontFamily: fonts.poppinsSemiBold,

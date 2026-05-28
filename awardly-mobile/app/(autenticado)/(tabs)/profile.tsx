@@ -527,8 +527,8 @@ export default function ProfileScreen() {
               {filmesVistos.length > 0 ? (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={s.posterRow}>
-                    {filmesVistos.map((f) => (
-                      <FilmePoster key={f.id} posterPath={f.poster_path} titulo={f.title}
+                    {filmesVistos.map((f, i) => (
+                      <FilmePoster key={`${f.id}-${i}`} posterPath={f.poster_path} titulo={f.title}
                         onPress={() => router.push(`/(autenticado)/filmes/${f.id}` as any)}
                         badge={f.estatuetas > 0 ? (
                           <View style={s.badgeWrap}>
