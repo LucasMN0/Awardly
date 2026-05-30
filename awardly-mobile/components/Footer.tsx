@@ -11,7 +11,7 @@ export default function Footer() {
   return (
     <View style={styles.footer}>
       <Text style={styles.copy}>
-        © 2026 Awardly — Todos os direitos reservados
+        © 2026 Awardly - Todos os direitos reservados
       </Text>
       <Text style={styles.tmdb}>
         This product uses the{' '}
