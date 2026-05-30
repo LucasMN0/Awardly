@@ -8,6 +8,10 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: awardly-mobile
+
     steps:
       - uses: actions/checkout@v4
 
