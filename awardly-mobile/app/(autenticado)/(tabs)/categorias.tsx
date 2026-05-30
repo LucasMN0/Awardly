@@ -26,7 +26,7 @@ const s = StyleSheet.create({
     paddingBottom: 16,
     paddingHorizontal: 24,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(201,168,76,0.15)',
+    borderBottomColor: 'rgba(201,168,76,0.16)',
     alignItems: 'center',
   },
   titulo: {
