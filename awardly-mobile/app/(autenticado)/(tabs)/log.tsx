@@ -1,383 +1,312 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
-  FlatList,
   Image,
-  StyleSheet,
   ActivityIndicator,
-  RefreshControl,
+  StyleSheet,
+  ScrollView,
+  Keyboard,
+  StatusBar,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Parse from '../../../lib/parseClient';
 import { getFilme, getImageURL } from '../../../lib/tmdb';
 import { colors, fonts, spacing, radius } from '../../../constants/theme';
+import NovoLogFilmeModal from '../../../components/NovoLogFilmeModal'; // <- Modal Novo
 
-type Aba = 'meus' | 'amigos';
+const TMDB_KEY = process.env.EXPO_PUBLIC_TMDB_API_KEY;
 
-interface LogFilme {
-  objectId: string;
-  filmeId: number;
+// ─── Tipos ────────────────────────────────────────────────────
+
+interface FilmeResultado {
+  objectId?: string;
+  tmdbId: number;
   titulo: string;
-  poster: string | null;
-  dataAssistido: string;
-  estatuetas: number;
-  like: boolean;
-  review: string | null;
-  usuarioNome?: string;
-  usuarioFoto?: string | null;
-  usuarioUsername?: string;
+  ano: string | number;
+  categorias: string[];
+  poster?: string | null;
+  tituloOriginal?: string;
 }
 
-// ─── Componente de estatuetas ────────────────────────────────
+// ─── Busca ────────────────────────────────────────────────────
 
-function Estatuetas({ valor }: { valor: number }) {
-  return (
-    <View style={s.estatuetasRow}>
-      {[1, 2, 3, 4, 5].map((i) => {
-        const cheia = valor >= i;
-        const meia = !cheia && valor >= i - 0.5;
-        return (
-          <View key={i} style={s.estatuetaSlot}>
-            {cheia || meia ? (
-              <Image
-                source={require('../../../assets/images/oscar2.png')}
-                style={[s.estatuetaImg, meia && { opacity: 0.5 }]}
-                resizeMode="contain"
-              />
-            ) : (
-              <Image
-                source={require('../../../assets/images/oscarvazio.png')}
-                style={s.estatuetaImg}
-                resizeMode="contain"
-              />
-            )}
-          </View>
-        );
-      })}
-    </View>
-  );
+async function buscarFilmesParse(termo: string): Promise<FilmeResultado[]> {
+  if (!termo.trim()) return [];
+  const Filme = Parse.Object.extend('Filme');
+  const query = new Parse.Query(Filme);
+  query.matches('titulo', termo, 'i');
+  query.limit(20);
+  const res = await query.find();
+  return res.map((f: any) => ({
+    objectId: f.id,
+    tmdbId: f.get('tmdbId'),
+    titulo: f.get('titulo'),
+    ano: f.get('ano'),
+    categorias: f.get('categorias') || [],
+  }));
 }
 
-// ─── Card de log ─────────────────────────────────────────────
+async function buscarFilmesTMDB(termo: string): Promise<FilmeResultado[]> {
+  if (!termo.trim()) return [];
+  try {
+    const res = await fetch(
+      `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_KEY}&query=${encodeURIComponent(termo)}&language=pt-BR`
+    );
+    const data = await res.json();
+    const tmdbIds = (data.results || []).slice(0, 20).map((m: any) => m.id);
+    if (!tmdbIds.length) return [];
+    const Filme = Parse.Object.extend('Filme');
+    const query = new Parse.Query(Filme);
+    query.containedIn('tmdbId', tmdbIds);
+    query.limit(20);
+    const resultados = await query.find();
+    return resultados.map((f: any) => ({
+      objectId: f.id,
+      tmdbId: f.get('tmdbId'),
+      titulo: f.get('titulo'),
+      ano: f.get('ano'),
+      categorias: f.get('categorias') || [],
+    }));
+  } catch {
+    return [];
+  }
+}
 
-function LogCard({
-  log,
-  mostrarUsuario = false,
+async function buscarFilmes(termo: string): Promise<FilmeResultado[]> {
+  const [r1, r2] = await Promise.allSettled([
+    buscarFilmesParse(termo),
+    buscarFilmesTMDB(termo),
+  ]);
+  const l1 = r1.status === 'fulfilled' ? r1.value : [];
+  const l2 = r2.status === 'fulfilled' ? r2.value : [];
+  const seen = new Set<string>();
+  const merged: FilmeResultado[] = [];
+  
+  for (const f of [...l1, ...l2]) {
+    if (!seen.has(f.objectId as string)) {
+      if (f.objectId) seen.add(f.objectId);
+      merged.push(f);
+    }
+  }
+  return merged;
+}
+
+// ─── Card de resultado ────────────────────────────────────────
+
+function FilmeCard({
+  filme,
+  detalhe,
   onPress,
 }: {
-  log: LogFilme;
-  mostrarUsuario?: boolean;
+  filme: FilmeResultado;
+  detalhe: any;
   onPress: () => void;
 }) {
-  const dataFormatada = log.dataAssistido
-    ? new Date(log.dataAssistido).toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      })
-    : '';
+  const posterUrl = detalhe?.poster_path
+    ? getImageURL(detalhe.poster_path, 'w185')
+    : null;
+  const ano = detalhe?.release_date?.slice(0, 4) || filme.ano;
+  const tituloOriginal =
+    detalhe?.original_title && detalhe.original_title !== filme.titulo
+      ? detalhe.original_title
+      : null;
 
   return (
-    <TouchableOpacity style={s.logCard} onPress={onPress} activeOpacity={0.8}>
-      {/* Poster */}
+    <TouchableOpacity style={s.card} onPress={onPress} activeOpacity={0.75}>
       <View style={s.posterWrap}>
-        {log.poster ? (
-          <Image source={{ uri: log.poster }} style={s.poster} resizeMode="cover" />
+        {posterUrl ? (
+          <Image source={{ uri: posterUrl }} style={s.poster} resizeMode="cover" />
         ) : (
           <View style={s.posterPlaceholder}>
-            <Ionicons name="film-outline" size={24} color={colors.muted} />
+            <Ionicons name="film-outline" size={22} color={colors.muted} />
           </View>
         )}
       </View>
 
-      {/* Info */}
-      <View style={s.logInfo}>
-        {mostrarUsuario && log.usuarioNome && (
-          <View style={s.usuarioRow}>
-            {log.usuarioFoto ? (
-              <Image source={{ uri: log.usuarioFoto }} style={s.avatarMini} />
-            ) : (
-              <View style={s.avatarMiniPlaceholder}>
-                <Text style={s.avatarMiniLetra}>
-                  {(log.usuarioNome || '?')[0].toUpperCase()}
-                </Text>
+      <View style={s.info}>
+        <Text style={s.titulo} numberOfLines={2}>{filme.titulo}</Text>
+        <Text style={s.ano}>
+          {ano}
+          {tituloOriginal ? `  ·  ${tituloOriginal}` : ''}
+        </Text>
+        {filme.categorias.length > 0 && (
+          <View style={s.tags}>
+            {filme.categorias.slice(0, 2).map((cat, i) => (
+              <View key={i} style={s.tag}>
+                <Text style={s.tagTxt}>{cat}</Text>
               </View>
-            )}
-            <Text style={s.usuarioNome}>{log.usuarioUsername || log.usuarioNome}</Text>
+            ))}
           </View>
         )}
+      </View>
 
-        <Text style={s.logTitulo} numberOfLines={2}>{log.titulo}</Text>
-
-        <View style={s.logMeta}>
-          {log.estatuetas > 0 && <Estatuetas valor={log.estatuetas} />}
-          {log.like && (
-            <Image
-              source={require('../../../assets/images/envelopecoracao.png')}
-              style={s.likeIcon}
-              resizeMode="contain"
-            />
-          )}
-        </View>
-
-        {log.review ? (
-          <Text style={s.logReview} numberOfLines={3}>{log.review}</Text>
-        ) : null}
-
-        <Text style={s.logData}>{dataFormatada}</Text>
+      <View style={s.logBtn}>
+        <Ionicons name="add-circle-outline" size={26} color={colors.gold} />
       </View>
     </TouchableOpacity>
   );
 }
 
-// ─── Hook: buscar meus logs ───────────────────────────────────
-
-function useMeusLogs() {
-  const [logs, setLogs] = useState<LogFilme[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState<string | null>(null);
-
-  const carregar = useCallback(async () => {
-    setLoading(true);
-    setErro(null);
-    try {
-      const user = Parse.User.current();
-      if (!user) { setLogs([]); return; }
-
-      const query = new Parse.Query('Log');
-      query.equalTo('usuarioId', user);
-      query.descending('dataAssistido');
-      query.limit(100);
-      const resultados = await query.find();
-
-      const lista: LogFilme[] = await Promise.all(
-        resultados.map(async (r: any) => {
-          const filmeId = r.get('filmeId');
-          let titulo = r.get('titulo') || '';
-          let poster: string | null = null;
-          try {
-            const detalhes = await getFilme(filmeId);
-            titulo = detalhes.title || titulo;
-            poster = getImageURL(detalhes.poster_path, 'w185');
-          } catch {}
-          return {
-            objectId: r.id,
-            filmeId,
-            titulo,
-            poster,
-            dataAssistido: r.get('dataAssistido')?.toISOString() || '',
-            estatuetas: r.get('estatuetas') || 0,
-            like: r.get('like') || false,
-            review: r.get('review') || null,
-          };
-        })
-      );
-      setLogs(lista);
-    } catch (e: any) {
-      setErro(e.message || 'Erro ao carregar logs.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { carregar(); }, [carregar]);
-  return { logs, loading, erro, recarregar: carregar };
-}
-
-// ─── Hook: buscar logs de amigos ─────────────────────────────
-
-function useLogsAmigos() {
-  const [logs, setLogs] = useState<LogFilme[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState<string | null>(null);
-
-  const carregar = useCallback(async () => {
-    setLoading(true);
-    setErro(null);
-    try {
-      const user = Parse.User.current();
-      if (!user) { setLogs([]); return; }
-
-      // Busca quem eu sigo
-      const qFollow = new Parse.Query('Follow');
-      qFollow.equalTo('seguidor', user);
-      qFollow.limit(200);
-      const follows = await qFollow.find();
-      const seguindoIds = follows.map((f: any) => {
-        const u = f.get('seguindo');
-        return u?.id || u?.objectId;
-      }).filter(Boolean);
-
-      if (seguindoIds.length === 0) { setLogs([]); return; }
-
-      // Busca logs desses usuários
-      const usuariosPtr = seguindoIds.map((id: string) => {
-        const u = new Parse.User();
-        u.id = id;
-        return u;
-      });
-
-      const qLog = new Parse.Query('Log');
-      qLog.containedIn('usuarioId', usuariosPtr);
-      qLog.descending('dataAssistido');
-      qLog.limit(100);
-      const resultados = await qLog.find();
-
-      // Busca dados dos usuários em batch
-      const qUsers = new Parse.Query(Parse.User);
-      qUsers.containedIn('objectId', seguindoIds);
-      const usuarios = await qUsers.find();
-      const mapaUsuarios: Record<string, any> = {};
-      usuarios.forEach((u: any) => { mapaUsuarios[u.id] = u; });
-
-      const lista: LogFilme[] = await Promise.all(
-        resultados.map(async (r: any) => {
-          const filmeId = r.get('filmeId');
-          const usuarioPtr = r.get('usuarioId');
-          const usuarioObj = mapaUsuarios[usuarioPtr?.id || usuarioPtr?.objectId];
-
-          let titulo = r.get('titulo') || '';
-          let poster: string | null = null;
-          try {
-            const detalhes = await getFilme(filmeId);
-            titulo = detalhes.title || titulo;
-            poster = getImageURL(detalhes.poster_path, 'w185');
-          } catch {}
-
-          return {
-            objectId: r.id,
-            filmeId,
-            titulo,
-            poster,
-            dataAssistido: r.get('dataAssistido')?.toISOString() || '',
-            estatuetas: r.get('estatuetas') || 0,
-            like: r.get('like') || false,
-            review: r.get('review') || null,
-            usuarioNome: usuarioObj?.get('nome') || usuarioObj?.get('username') || '',
-            usuarioUsername: usuarioObj?.get('username') || '',
-            usuarioFoto: usuarioObj?.get('foto') || null,
-          };
-        })
-      );
-      setLogs(lista);
-    } catch (e: any) {
-      setErro(e.message || 'Erro ao carregar logs de amigos.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { carregar(); }, [carregar]);
-  return { logs, loading, erro, recarregar: carregar };
-}
-
 // ─── Tela principal ───────────────────────────────────────────
 
 export default function LogScreen() {
-  const router = useRouter();
-  const [aba, setAba] = useState<Aba>('meus');
-  const meusLogs = useMeusLogs();
-  const logsAmigos = useLogsAmigos();
+  const insets = useSafeAreaInsets();
+  const [input, setInput] = useState('');
+  const [termo, setTermo] = useState('');
+  const [filmes, setFilmes] = useState<FilmeResultado[]>([]);
+  const [detalhes, setDetalhes] = useState<Record<number, any>>({});
+  const [buscando, setBuscando] = useState(false);
+  
+  // Alterado para passar o objeto FilmeResultado inteiro
+  const [filmeSelecionado, setFilmeSelecionado] = useState<FilmeResultado | null>(null);
+  
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<TextInput>(null);
 
-  const atual = aba === 'meus' ? meusLogs : logsAmigos;
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!input.trim()) {
+      setTermo('');
+      setFilmes([]);
+      setDetalhes({});
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      setTermo(input.trim());
+    }, 450);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [input]);
 
-  function handleLogPress(log: LogFilme) {
-    router.push(`/(autenticado)/filmes/${log.filmeId}` as any);
+  useEffect(() => {
+    if (!termo) return;
+    setBuscando(true);
+    buscarFilmes(termo)
+      .then(async (lista) => {
+        setFilmes(lista);
+        const map: Record<number, any> = {};
+        await Promise.allSettled(
+          lista.map(async (f) => {
+            try { map[f.tmdbId] = await getFilme(f.tmdbId); } catch {}
+          })
+        );
+        setDetalhes(map);
+      })
+      .finally(() => setBuscando(false));
+  }, [termo]);
+
+  function handleLimpar() {
+    setInput('');
+    setTermo('');
+    setFilmes([]);
+    setDetalhes({});
+    inputRef.current?.focus();
   }
 
-  function handleAdicionarLog() {
-    // Navega para busca para selecionar um filme e logar
-    router.push('/(autenticado)/(tabs)/search' as any);
+  function handleSalvo(resultado?: string) {
+    setFilmeSelecionado(null);
+    if (resultado === '__salvo__') {
+      // Limpa os resultados apenas se tiver salvado com sucesso
+      setInput('');
+      setTermo('');
+      setFilmes([]);
+      setDetalhes({});
+    }
   }
 
-  const ListVazia = () => {
-    if (atual.loading) return null;
-    return (
-      <View style={s.vazio}>
-        <Text style={s.vazioTitulo}>
-          {aba === 'meus'
-            ? 'Nenhum log ainda.'
-            : 'Nenhum log de amigos.'}
-        </Text>
-        <Text style={s.vazioSub}>
-          {aba === 'meus'
-            ? 'Registre um filme que você assistiu.'
-            : 'Siga pessoas para ver os logs delas aqui.'}
-        </Text>
-      </View>
-    );
-  };
+  const pesquisando = !!termo;
 
   return (
     <View style={s.root}>
-      {/* Header */}
-      <View style={s.header}>
-        <Text style={s.titulo}>Diário</Text>
+      <StatusBar barStyle="light-content" />
 
-        {/* Toggle */}
-        <View style={s.toggle}>
-          <TouchableOpacity
-            style={[s.toggleBtn, aba === 'meus' && s.toggleBtnAtivo]}
-            onPress={() => setAba('meus')}
-            activeOpacity={0.8}
-          >
-            <Text style={[s.toggleTxt, aba === 'meus' && s.toggleTxtAtivo]}>
-              meus logs
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.toggleBtn, aba === 'amigos' && s.toggleBtnAtivo]}
-            onPress={() => setAba('amigos')}
-            activeOpacity={0.8}
-          >
-            <Text style={[s.toggleTxt, aba === 'amigos' && s.toggleTxtAtivo]}>
-              amigos
-            </Text>
-          </TouchableOpacity>
+      {/* Header */}
+      <View style={[s.header, { paddingTop: insets.top + 16 }]}>
+        <Text style={s.headerTitulo}>Novo Log</Text>
+
+        <View style={s.searchBar}>
+          <Ionicons name="search-outline" size={18} color={colors.muted} />
+          <TextInput
+            ref={inputRef}
+            style={s.searchInput}
+            placeholder="Buscar filme para logar..."
+            placeholderTextColor={colors.muted}
+            value={input}
+            onChangeText={setInput}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            onSubmitEditing={Keyboard.dismiss}
+          />
+          {input.length > 0 && (
+            <TouchableOpacity
+              onPress={handleLimpar}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close-circle" size={18} color={colors.muted} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
-      {/* Lista */}
-      {atual.loading ? (
-        <View style={s.centrado}>
-          <ActivityIndicator color={colors.gold} size="large" />
-        </View>
-      ) : atual.erro ? (
-        <View style={s.centrado}>
-          <Text style={s.erroTxt}>Erro ao carregar logs.</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={atual.logs}
-          keyExtractor={(item) => item.objectId}
-          contentContainerStyle={s.listContent}
-          showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View style={s.separador} />}
-          ListEmptyComponent={<ListVazia />}
-          refreshControl={
-            <RefreshControl
-              refreshing={atual.loading}
-              onRefresh={atual.recarregar}
-              tintColor={colors.gold}
-            />
-          }
-          renderItem={({ item }) => (
-            <LogCard
-              log={item}
-              mostrarUsuario={aba === 'amigos'}
-              onPress={() => handleLogPress(item)}
-            />
-          )}
-        />
-      )}
+      {/* Conteúdo */}
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={s.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {!pesquisando && (
+          <View style={s.emptyWrap}>
+            <Ionicons name="book-outline" size={52} color={colors.gold} style={{ opacity: 0.15 }} />
+            <Text style={s.emptyTitulo}>registre o que assistiu</Text>
+            <Text style={s.emptySub}>
+              Busque o filme acima e registre sua nota, like e review.
+            </Text>
+          </View>
+        )}
 
-      {/* FAB — adicionar log */}
-      <TouchableOpacity style={s.fab} onPress={handleAdicionarLog} activeOpacity={0.85}>
-        <Ionicons name="add" size={28} color={colors.black} />
-      </TouchableOpacity>
+        {pesquisando && buscando && (
+          <View style={s.centrado}>
+            <ActivityIndicator color={colors.gold} size="large" />
+          </View>
+        )}
+
+        {pesquisando && !buscando && (
+          <>
+            {filmes.length === 0 ? (
+              <View style={s.centrado}>
+                <Text style={s.semResultado}>Nenhum filme encontrado.</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={s.resultadosLabel}>
+                  {filmes.length} filme{filmes.length !== 1 ? 's' : ''} para "{termo}"
+                </Text>
+                {filmes.map((filme) => (
+                  <FilmeCard
+                    key={filme.objectId || filme.tmdbId.toString()}
+                    filme={filme}
+                    detalhe={detalhes[filme.tmdbId]}
+                    onPress={() => setFilmeSelecionado(filme)}
+                  />
+                ))}
+              </>
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      {/* Usando o NovoLogFilmeModal */}
+      <NovoLogFilmeModal
+        filme={filmeSelecionado}
+        onClose={handleSalvo}
+      />
     </View>
   );
 }
@@ -385,212 +314,32 @@ export default function LogScreen() {
 // ─── Styles ──────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.bg,
+  root: { flex: 1, backgroundColor: colors.bg },
+  header: { paddingHorizontal: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.gold15, gap: spacing.md },
+  headerTitulo: { fontFamily: fonts.cormorantItalic, fontSize: 32, color: colors.text, letterSpacing: 0.5 },
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface,
+    borderRadius: radius.lg, borderWidth: 1, borderColor: colors.gold25,
+    paddingHorizontal: spacing.md, height: 46, gap: spacing.sm,
   },
-  header: {
-    paddingTop: 56,
-    paddingBottom: 16,
-    paddingHorizontal: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gold15,
-    alignItems: 'center',
-    gap: spacing.lg,
-  },
-  titulo: {
-    fontFamily: fonts.cormorantItalic,
-    fontSize: 32,
-    color: colors.text,
-    letterSpacing: 0.5,
-  },
-  toggle: {
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: colors.gold30,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-  },
-  toggleBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 28,
-    backgroundColor: 'transparent',
-  },
-  toggleBtnAtivo: {
-    backgroundColor: colors.gold,
-  },
-  toggleTxt: {
-    fontFamily: fonts.poppinsMedium,
-    fontSize: 13,
-    color: colors.white45,
-    letterSpacing: 0.5,
-  },
-  toggleTxtAtivo: {
-    color: colors.black,
-  },
-
-  // Lista
-  listContent: {
-    paddingTop: spacing.lg,
-    paddingBottom: 100,
-    paddingHorizontal: 24,
-  },
-  separador: {
-    height: 1,
-    backgroundColor: colors.gold15,
-    marginVertical: spacing.md,
-  },
-
-  // Card
-  logCard: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  posterWrap: {
-    width: 72,
-    height: 108,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
-    flexShrink: 0,
-  },
-  poster: {
-    width: '100%',
-    height: '100%',
-  },
-  posterPlaceholder: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logInfo: {
-    flex: 1,
-    gap: spacing.xs,
-    paddingTop: 2,
-  },
-  logTitulo: {
-    fontFamily: fonts.cormorantRegular,
-    fontSize: 18,
-    color: colors.text,
-    lineHeight: 22,
-  },
-  logMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  estatuetasRow: {
-    flexDirection: 'row',
-    gap: 2,
-  },
-  estatuetaSlot: {
-    width: 14,
-    height: 18,
-  },
-  estatuetaImg: {
-    width: 14,
-    height: 18,
-  },
-  likeIcon: {
-    width: 18,
-    height: 18,
-    marginLeft: 2,
-  },
-  logReview: {
-    fontFamily: fonts.poppins,
-    fontSize: 12,
-    color: colors.white65,
-    lineHeight: 18,
-    fontStyle: 'italic',
-  },
-  logData: {
-    fontFamily: fonts.poppins,
-    fontSize: 11,
-    color: colors.muted,
-    marginTop: 2,
-  },
-
-  // Usuário (feed de amigos)
-  usuarioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: 2,
-  },
-  avatarMini: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-  },
-  avatarMiniPlaceholder: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.gold30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarMiniLetra: {
-    fontFamily: fonts.poppinsBold,
-    fontSize: 9,
-    color: colors.gold,
-  },
-  usuarioNome: {
-    fontFamily: fonts.poppinsMedium,
-    fontSize: 12,
-    color: colors.gold,
-    letterSpacing: 0.3,
-  },
-
-  // Estados
-  centrado: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  erroTxt: {
-    fontFamily: fonts.poppins,
-    fontSize: 14,
-    color: colors.error,
-  },
-  vazio: {
-    alignItems: 'center',
-    paddingVertical: 64,
-    gap: spacing.sm,
-  },
-  vazioTitulo: {
-    fontFamily: fonts.cormorantItalic,
-    fontSize: 22,
-    color: colors.white35,
-    letterSpacing: 0.3,
-  },
-  vazioSub: {
-    fontFamily: fonts.poppins,
-    fontSize: 13,
-    color: colors.muted,
-    textAlign: 'center',
-    paddingHorizontal: 32,
-  },
-
-  // FAB
-  fab: {
-    position: 'absolute',
-    bottom: 32,
-    right: 24,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-  },
+  searchInput: { flex: 1, color: colors.text, fontSize: 14, fontFamily: fonts.poppins, paddingVertical: 0 },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 24, paddingBottom: 80 },
+  emptyWrap: { alignItems: 'center', paddingTop: 80, gap: spacing.md },
+  emptyTitulo: { fontFamily: fonts.cormorantItalic, fontSize: 24, color: colors.white35, letterSpacing: 0.3 },
+  emptySub: { fontFamily: fonts.poppins, fontSize: 13, color: colors.muted, textAlign: 'center', paddingHorizontal: 32, lineHeight: 20 },
+  resultadosLabel: { fontFamily: fonts.poppins, fontSize: 11, color: colors.muted, marginTop: spacing.lg, marginBottom: spacing.xs, letterSpacing: 0.3 },
+  centrado: { paddingTop: 60, alignItems: 'center' },
+  semResultado: { fontFamily: fonts.cormorantItalic, fontSize: 18, color: colors.white35 },
+  card: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.gold15, gap: spacing.md },
+  posterWrap: { width: 52, height: 78, borderRadius: radius.md, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexShrink: 0 },
+  poster: { width: '100%', height: '100%' },
+  posterPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  info: { flex: 1, gap: spacing.xs },
+  titulo: { fontFamily: fonts.cormorantRegular, fontSize: 17, color: colors.text, lineHeight: 22 },
+  ano: { fontFamily: fonts.poppins, fontSize: 12, color: colors.muted },
+  tags: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap', marginTop: 2 },
+  tag: { backgroundColor: colors.gold10, borderRadius: radius.sm, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: colors.gold15 },
+  tagTxt: { fontFamily: fonts.poppinsMedium, fontSize: 9, color: colors.gold, letterSpacing: 0.5, textTransform: 'uppercase' },
+  logBtn: { padding: 4 },
 });
