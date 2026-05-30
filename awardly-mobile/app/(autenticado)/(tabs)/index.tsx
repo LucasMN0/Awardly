@@ -1,5 +1,4 @@
 // (autenticado)/(tabs)/home.tsx
-import Parse from '../../../lib/parseClient';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
@@ -16,6 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import Parse from '../../../lib/parseClient';
 import { getFilme, getImageURL } from '../../../lib/tmdb';
 
 const GOLD = '#C9A84C';
