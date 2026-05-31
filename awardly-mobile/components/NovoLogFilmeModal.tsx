@@ -16,7 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Parse from '../lib/parseClient';
 import { getFilme, getImageURL } from '../lib/tmdb';
-import { colors, fonts } from '../constants/theme'; // Ajuste o caminho se necessário
+import { colors, fonts } from '../constants/theme';
 
 // ─── Tipos ────────────────────────────────────────────────────
 
@@ -74,11 +74,11 @@ const est = StyleSheet.create({
   imgVazia: { opacity: 0.18 },
   meiaVaziaOverlay: {
     position: 'absolute', right: 0, top: 0, width: SLOT / 2, height: SLOT,
-    backgroundColor: '#0f0d09', opacity: 0.65,
+    backgroundColor: colors.bg, opacity: 0.65,
   },
   meiaEsq: { position: 'absolute', left: 0, top: 0, width: SLOT / 2, height: SLOT, zIndex: 10 },
   meiaDir: { position: 'absolute', right: 0, top: 0, width: SLOT / 2, height: SLOT, zIndex: 10 },
-  valor: { fontFamily: 'Poppins-Medium', fontSize: 13, color: '#C9A84C', marginLeft: 8 },
+  valor: { fontFamily: fonts.poppinsMedium, fontSize: 13, color: colors.gold, marginLeft: 8 },
 });
 
 // ─── Botão like ───────────────────────────────────────────────
@@ -107,13 +107,13 @@ const lk = StyleSheet.create({
   btn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 16, paddingVertical: 10, borderRadius: 4,
-    borderWidth: 1, borderColor: 'rgba(201,168,76,0.15)', backgroundColor: '#111008',
+    borderWidth: 1, borderColor: colors.gold15, backgroundColor: colors.cardBg,
   },
-  btnAtivo: { borderColor: 'rgba(201,168,76,0.5)', backgroundColor: 'rgba(201,168,76,0.08)' },
+  btnAtivo: { borderColor: colors.gold40, backgroundColor: colors.gold10 },
   img: { width: 20, height: 20, resizeMode: 'contain', opacity: 0.4 },
   imgAtivo: { opacity: 1 },
-  txt: { fontFamily: 'Poppins-Medium', fontSize: 13, color: 'rgba(255,255,255,0.35)' },
-  txtAtivo: { color: '#C9A84C' },
+  txt: { fontFamily: fonts.poppinsMedium, fontSize: 13, color: colors.white35 },
+  txtAtivo: { color: colors.gold },
 });
 
 // ─── Modal principal ──────────────────────────────────────────
@@ -143,7 +143,6 @@ export default function NovoLogFilmeModal({ filme, onClose }: Props) {
       return;
     }
 
-    // Reseta form para padrão de "novo log"
     setData(new Date().toISOString().split('T')[0]);
     setEstatuetas(0);
     setLike(false);
@@ -160,20 +159,19 @@ export default function NovoLogFilmeModal({ filme, onClose }: Props) {
 
   async function handleSalvar() {
     if (!filme) return;
-    setSalvando(true); 
+    setSalvando(true);
     setErro('');
-    
+
     try {
       const user = Parse.User.current();
       if (!user) throw new Error('Usuário não autenticado.');
 
       const Log = Parse.Object.extend('Log');
       const novoLog = new Log();
-      
+
       novoLog.set('usuarioId', user);
       novoLog.set('filmeId', filme.tmdbId);
-      
-      // Se o filme já estiver no nosso banco, podemos associá-lo (opcional dependendo da sua modelagem)
+
       if (filme.objectId) {
         const FilmePointer = Parse.Object.extend('Filme');
         novoLog.set('filme', FilmePointer.createWithoutData(filme.objectId));
@@ -183,9 +181,9 @@ export default function NovoLogFilmeModal({ filme, onClose }: Props) {
       novoLog.set('estatuetas', estatuetas);
       novoLog.set('like', like);
       if (review.trim()) novoLog.set('review', review.trim());
-      
+
       await novoLog.save();
-      
+
       setMensagem('Log criado com sucesso!');
       setTimeout(() => onClose('__salvo__'), 700);
     } catch (e: any) {
@@ -213,7 +211,7 @@ export default function NovoLogFilmeModal({ filme, onClose }: Props) {
               )}
             </View>
             <TouchableOpacity onPress={() => onClose()} style={s.btnFechar}>
-              <Ionicons name="close" size={20} color="rgba(255,255,255,0.45)" />
+              <Ionicons name="close" size={20} color={colors.white45} />
             </TouchableOpacity>
           </View>
 
@@ -223,7 +221,7 @@ export default function NovoLogFilmeModal({ filme, onClose }: Props) {
             keyboardShouldPersistTaps="handled"
           >
             {carregandoFilme ? (
-              <ActivityIndicator color="#C9A84C" />
+              <ActivityIndicator color={colors.gold} />
             ) : detalhes ? (
               <View style={s.filmeRow}>
                 {posterUrl ? (
@@ -252,7 +250,7 @@ export default function NovoLogFilmeModal({ filme, onClose }: Props) {
                 value={data}
                 onChangeText={setData}
                 placeholder="AAAA-MM-DD"
-                placeholderTextColor="rgba(255,255,255,0.25)"
+                placeholderTextColor={colors.white35}
                 keyboardType="numeric"
                 maxLength={10}
               />
@@ -278,7 +276,7 @@ export default function NovoLogFilmeModal({ filme, onClose }: Props) {
                 value={review}
                 onChangeText={setReview}
                 placeholder="O que você achou do filme?"
-                placeholderTextColor="rgba(255,255,255,0.25)"
+                placeholderTextColor={colors.white35}
                 multiline
                 numberOfLines={3}
                 maxLength={500}
@@ -306,65 +304,61 @@ export default function NovoLogFilmeModal({ filme, onClose }: Props) {
 
 // ─── Styles ───────────────────────────────────────────────────
 
-const GOLD = '#C9A84C';
-const CARD_BG = '#111008';
-const BORDER = 'rgba(201,168,76,0.15)';
-
 const s = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
-  overlayBg: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.65)' },
+  overlayBg: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.overlay70 },
   sheet: {
-    backgroundColor: '#0f0d09', borderTopLeftRadius: 16, borderTopRightRadius: 16,
-    maxHeight: '90%', borderTopWidth: 1, borderColor: BORDER,
+    backgroundColor: colors.bg, borderTopLeftRadius: 16, borderTopRightRadius: 16,
+    maxHeight: '90%', borderTopWidth: 1, borderColor: colors.gold15,
   },
   handle: {
-    width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.12)',
+    width: 36, height: 4, borderRadius: 2, backgroundColor: colors.white10,
     alignSelf: 'center', marginTop: 10, marginBottom: 4,
   },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-    padding: 20, borderBottomWidth: 1, borderBottomColor: BORDER,
+    padding: 20, borderBottomWidth: 1, borderBottomColor: colors.gold15,
   },
-  headerTitulo: { fontFamily: 'CormorantGaramond-MediumItalic', fontSize: 30, color: '#fff' },
-  headerSub: { fontFamily: 'Poppins-Regular', fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 7 },
+  headerTitulo: { fontFamily: fonts.cormorantRegular, fontSize: 30, color: colors.text },
+  headerSub: { fontFamily: fonts.poppins, fontSize: 13, color: colors.white45, marginTop: 7 },
   btnFechar: { padding: 4 },
   scrollContent: { padding: 20, gap: 20, paddingBottom: 40 },
   filmeRow: {
-    flexDirection: 'row', gap: 14, backgroundColor: CARD_BG, borderWidth: 1,
-    borderColor: BORDER, borderRadius: 6, padding: 12,
+    flexDirection: 'row', gap: 14, backgroundColor: colors.cardBg, borderWidth: 1,
+    borderColor: colors.gold15, borderRadius: 6, padding: 12,
   },
   poster: { width: 60, height: 90, borderRadius: 4, resizeMode: 'cover' },
   posterPlaceholder: {
-    width: 60, height: 90, borderRadius: 4, backgroundColor: '#1a1712',
+    width: 60, height: 90, borderRadius: 4, backgroundColor: colors.surface,
     alignItems: 'center', justifyContent: 'center', padding: 6,
   },
-  posterPlaceholderTxt: { fontFamily: 'Poppins-Regular', fontSize: 10, color: 'rgba(255,255,255,0.25)', textAlign: 'center' },
+  posterPlaceholderTxt: { fontFamily: fonts.poppins, fontSize: 10, color: colors.white35, textAlign: 'center' },
   filmeInfo: { flex: 1, gap: 3 },
-  filmeTitulo: { fontFamily: 'Poppins-SemiBold', fontSize: 14, color: '#fff', lineHeight: 18 },
-  filmeAno: { fontFamily: 'Poppins-Regular', fontSize: 12, color: 'rgba(255,255,255,0.35)' },
-  filmeSinopse: { fontFamily: 'Poppins-Regular', fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 16, marginTop: 2 },
+  filmeTitulo: { fontFamily: fonts.poppinsSemiBold, fontSize: 14, color: colors.text, lineHeight: 18 },
+  filmeAno: { fontFamily: fonts.poppins, fontSize: 12, color: colors.white35 },
+  filmeSinopse: { fontFamily: fonts.poppins, fontSize: 11, color: colors.white35, lineHeight: 16, marginTop: 2 },
   campo: { gap: 10 },
   campoLabelRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   campoLabel: {
-    fontFamily: 'Poppins-Medium', fontSize: 11, textTransform: 'uppercase',
-    letterSpacing: 1, color: 'rgba(255,255,255,0.45)',
+    fontFamily: fonts.poppinsMedium, fontSize: 11, textTransform: 'uppercase',
+    letterSpacing: 1, color: colors.white45,
   },
-  opcional: { fontFamily: 'Poppins-Regular', fontSize: 10, color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' },
+  opcional: { fontFamily: fonts.poppins, fontSize: 10, color: colors.white35, fontStyle: 'italic' },
   inputData: {
-    borderWidth: 1, borderColor: BORDER, borderRadius: 4, paddingHorizontal: 12,
-    paddingVertical: 10, color: '#fff', fontFamily: 'Poppins-Regular',
-    fontSize: 13, backgroundColor: CARD_BG,
+    borderWidth: 1, borderColor: colors.gold15, borderRadius: 4, paddingHorizontal: 12,
+    paddingVertical: 10, color: colors.text, fontFamily: fonts.poppins,
+    fontSize: 13, backgroundColor: colors.cardBg,
   },
   textarea: {
-    borderWidth: 1, borderColor: BORDER, borderRadius: 4, padding: 12,
-    color: '#fff', fontFamily: 'Poppins-Regular', fontSize: 13, lineHeight: 20,
-    minHeight: 80, backgroundColor: CARD_BG, textAlignVertical: 'top',
+    borderWidth: 1, borderColor: colors.gold15, borderRadius: 4, padding: 12,
+    color: colors.text, fontFamily: fonts.poppins, fontSize: 13, lineHeight: 20,
+    minHeight: 80, backgroundColor: colors.cardBg, textAlignVertical: 'top',
   },
-  contador: { fontFamily: 'Poppins-Regular', fontSize: 10, color: 'rgba(255,255,255,0.25)', textAlign: 'right', marginTop: -4 },
-  msg: { fontFamily: 'Poppins-Regular', fontSize: 13, textAlign: 'center', borderRadius: 4, padding: 10 },
-  msgSucesso: { color: GOLD, backgroundColor: 'rgba(201,168,76,0.08)' },
-  msgErro: { color: '#e05c5c', backgroundColor: 'rgba(224,92,92,0.08)' },
+  contador: { fontFamily: fonts.poppins, fontSize: 10, color: colors.white35, textAlign: 'right', marginTop: -4 },
+  msg: { fontFamily: fonts.poppins, fontSize: 13, textAlign: 'center', borderRadius: 4, padding: 10 },
+  msgSucesso: { color: colors.gold, backgroundColor: colors.gold10 },
+  msgErro: { color: colors.error, backgroundColor: colors.errorBg },
   acoes: { flexDirection: 'row', gap: 10, justifyContent: 'flex-end', marginTop: 4 },
-  btnSalvar: { flex: 1, paddingVertical: 12, backgroundColor: GOLD, borderRadius: 4, alignItems: 'center' },
-  btnSalvarTxt: { fontFamily: 'Poppins-SemiBold', fontSize: 13, color: '#0a0906' },
+  btnSalvar: { flex: 1, paddingVertical: 12, backgroundColor: colors.gold, borderRadius: 4, alignItems: 'center' },
+  btnSalvarTxt: { fontFamily: fonts.poppinsSemiBold, fontSize: 13, color: colors.black },
 });
