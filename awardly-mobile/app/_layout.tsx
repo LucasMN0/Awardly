@@ -21,6 +21,8 @@ export default function RootLayout() {
     if (loaded || error) {
       SplashScreen.hideAsync();
     }
+    const timeout = setTimeout(() => SplashScreen.hideAsync(), 3000);
+    return () => clearTimeout(timeout);
   }, [loaded, error]);
 
   if (!loaded && !error) {
