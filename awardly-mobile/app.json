@@ -9,6 +9,10 @@
     "scheme": "awardlymobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "assetBundlePatterns": [
+      "assets/fonts/*",
+      "assets/images/*"
+    ],
     "ios": {
       "supportsTablet": true
     },
